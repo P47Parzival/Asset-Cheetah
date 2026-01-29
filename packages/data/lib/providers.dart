@@ -8,7 +8,7 @@ import 'package:dio/dio.dart';
 final dioProvider = Provider<Dio>((ref) {
   // In real app, add interceptors for auth token here
   return Dio(BaseOptions(
-    baseUrl: 'http://localhost:5000/api', // Use 10.0.2.2 for Android Emulator
+    baseUrl: 'http://192.168.1.8:5000/api', // Use your computer's IP for physical device
     connectTimeout: const Duration(seconds: 5),
     receiveTimeout: const Duration(seconds: 3),
   ));
@@ -27,5 +27,6 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
   return SyncRepository(
     dio: ref.watch(dioProvider),
     localDb: ref.watch(localDatabaseProvider),
+    authRepository: ref.watch(authRepositoryProvider),
   );
 });

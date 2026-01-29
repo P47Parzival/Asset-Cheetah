@@ -6,7 +6,7 @@ class AuthRepository {
   final FlutterSecureStorage _storage;
 
   AuthRepository({Dio? dio, FlutterSecureStorage? storage})
-      : _dio = dio ?? Dio(BaseOptions(baseUrl: 'http://localhost:5000/api')),
+      : _dio = dio ?? Dio(BaseOptions(baseUrl: 'http://192.168.1.8:5000/api')),
         _storage = storage ?? const FlutterSecureStorage();
 
   Future<String?> login(String username, String password) async {
@@ -43,5 +43,9 @@ class AuthRepository {
 
   Future<String?> getToken() async {
     return await _storage.read(key: 'jwt_token');
+  }
+
+  Future<String?> getUserId() async {
+    return await _storage.read(key: 'user_id');
   }
 }

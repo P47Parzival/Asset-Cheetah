@@ -105,8 +105,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
     final localDb = ref.read(localDatabaseProvider);
     final isar = await localDb.db;
     
-    // In real app, get current user ID
-    final userId = await ref.read(authRepositoryProvider).getToken(); // Using token as proxy for now or need decode
+    final userId = await ref.read(authRepositoryProvider).getUserId();
+
+    if (userId == null) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: User not logged in')));
+       return;
+    }
 
     final event = LocalEvent()
       ..eventId = _uuid.v4()
@@ -115,8 +119,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       ..payloadJson = jsonEncode(payload)
       ..occurredAt = DateTime.now()
       ..isSynced = false
-      ..userId = 'current_user_id' // TODO: Get actual user ID
-      ..deviceId = 'device_001'; // TODO: Get actual device info
+      ..userId = userId
+      ..deviceId = 'device_001'; // Keep device ID hardcoded or use device_info_plus later
 
     await isar.writeTxn(() async {
       await isar.localEvents.put(event);
@@ -124,7 +128,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
 
     if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Event Saved Locally')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Event Saved Locally. Remember to Sync!')));
       controller.start();
     }
   }

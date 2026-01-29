@@ -3,15 +3,21 @@ import 'package:isar/isar.dart';
 import 'package:data/services/local_database.dart';
 import 'package:data/models/local_asset.dart';
 import 'package:data/models/local_event.dart';
+import 'package:data/repositories/auth_repository.dart';
 import 'dart:convert';
 
 class SyncRepository {
   final Dio _dio;
   final LocalDatabase _localDb;
+  final AuthRepository _authRepository;
 
-  SyncRepository({required Dio dio, required LocalDatabase localDb})
-      : _dio = dio,
-        _localDb = localDb;
+  SyncRepository({
+    required Dio dio,
+    required LocalDatabase localDb,
+    required AuthRepository authRepository,
+  })  : _dio = dio,
+        _localDb = localDb,
+        _authRepository = authRepository;
 
   // Push unsynced events to server
   Future<void> pushEvents() async {
@@ -35,9 +41,20 @@ class SyncRepository {
         'deviceId': e.deviceId,
       }).toList();
 
-      final response = await _dio.post('/sync/events', data: {
-        'events': eventsData,
-      });
+      final token = await _authRepository.getToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final response = await _dio.post(
+        '/sync/events',
+        data: {
+          'events': eventsData,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
 
       if (response.statusCode == 200) {
         // Mark as synced locally
@@ -66,10 +83,20 @@ class SyncRepository {
     try {
       // TODO: Get lastSync from prefs
       String? lastSync = null; 
+      final token = await _authRepository.getToken();
+      if (token == null) throw Exception('Not authenticated');
 
-      final response = await _dio.get('/sync/assets', queryParameters: {
-        if (lastSync != null) 'lastSync': lastSync,
-      });
+      final response = await _dio.get(
+        '/sync/assets',
+        queryParameters: {
+          if (lastSync != null) 'lastSync': lastSync,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
 
       if (response.statusCode == 200) {
         final List<dynamic> assetsData = response.data;
