@@ -1,0 +1,9 @@
+name: asset_cheetah_workspace
+
+packages:
+  - apps/**
+  - packages/**
+  - packages/features/**
+
+scripts:
+  postbootstrap: flutter pub get
