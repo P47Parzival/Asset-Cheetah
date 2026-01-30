@@ -1,38 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:data/services/local_database.dart';
-import 'package:data/repositories/auth_repository.dart';
-import 'package:data/repositories/sync_repository.dart';
-import 'package:data/repositories/dashboard_repository.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'package:data/repositories/auth_repository.dart';
+import 'package:data/repositories/dashboard_repository.dart';
 
+// Foundation Providers (Web Safe)
 final dioProvider = Provider<Dio>((ref) {
-  String baseUrl = kIsWeb 
-      ? 'http://localhost:5000/api' 
-      : 'http://192.168.1.8:5000/api'; // IP for Mobile, Localhost for Web
-
   return Dio(BaseOptions(
-    baseUrl: baseUrl,
+    baseUrl: 'http://localhost:5000/api', // Web defaults to localhost
     connectTimeout: const Duration(seconds: 5),
     receiveTimeout: const Duration(seconds: 3),
   ));
 });
 
-final localDatabaseProvider = Provider<LocalDatabase>((ref) {
-  return LocalDatabase();
-});
-
 // Repository Providers
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(dio: ref.watch(dioProvider));
-});
-
-final syncRepositoryProvider = Provider<SyncRepository>((ref) {
-  return SyncRepository(
-    dio: ref.watch(dioProvider),
-    localDb: ref.watch(localDatabaseProvider),
-    authRepository: ref.watch(authRepositoryProvider),
-  );
 });
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {

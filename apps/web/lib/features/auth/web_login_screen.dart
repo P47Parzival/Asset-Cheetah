@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:data/web_providers.dart';
+import 'package:data/repositories/auth_repository.dart';
 
-class WebLoginScreen extends ConsumerWidget {
+class WebLoginScreen extends ConsumerStatefulWidget {
   const WebLoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WebLoginScreen> createState() => _WebLoginScreenState();
+}
+
+class _WebLoginScreenState extends ConsumerState<WebLoginScreen> {
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
         child: Container(
@@ -30,29 +43,46 @@ class WebLoginScreen extends ConsumerWidget {
               const SizedBox(height: 8),
               Text('Manager Login', style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 32),
-               const TextField(
-                decoration: InputDecoration(labelText: 'Username', border: OutlineInputBorder()),
+              TextField(
+                controller: _usernameController,
+                decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
                 obscureText: true,
               ),
-              const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () {
-                  // TODO: Implement Auth Logic
-                  context.go('/dashboard');
-                },
+                onPressed: _isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
                 ),
-                child: const Text('Login'),
+                child: _isLoading ? const CircularProgressIndicator() : const Text('Login'),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _login() async {
+    setState(() => _isLoading = true);
+    try {
+      final token = await ref.read(authRepositoryProvider).login(
+        _usernameController.text, 
+        _passwordController.text
+      );
+      if (token != null) {
+        context.go('/dashboard');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid credentials')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }
