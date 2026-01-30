@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/auth/web_login_screen.dart';
 import 'features/dashboard/dashboard_shell.dart';
 import 'features/dashboard/overview_screen.dart';
+import 'features/assets/asset_list_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   // In a real app, listen to auth state to redirect
@@ -25,10 +26,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/assets',
-            builder: (context, state) => const Scaffold(body: Center(child: Text('Asset List'))),
+            builder: (context, state) => const AssetListScreen(),
           ),
         ],
       ),
     ],
   );
 });
+

@@ -24,6 +24,14 @@ const loginUser = async (req, res) => {
             token: generateToken(user._id),
         });
     } else {
+        console.log(`Login failed for user: ${username}`);
+        if (user) {
+            console.log('User found in DB');
+            const isMatch = await user.matchPassword(password);
+            console.log(`Password match result: ${isMatch}`);
+        } else {
+            console.log('User NOT found in DB');
+        }
         res.status(401).json({ message: 'Invalid username or password' });
     }
 };

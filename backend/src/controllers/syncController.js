@@ -58,10 +58,19 @@ const syncEvents = async (req, res) => {
                 asset.lastScannedBy = eventData.userId;
 
                 await asset.save();
-            } else if (eventData.actionType === 'SCAN') {
-                // Optional: Create asset on first scan if it doesn't exist? 
-                // For now, assume assets must be master-created by Admin.
-                // But maybe we want to log that an unknown asset was scanned.
+            } else if (eventData.actionType === 'SCAN' || eventData.actionType === 'STATUS_CHANGE') {
+                // Auto-create Asset if it doesn't exist (Self-Registration)
+                const newAsset = new Asset({
+                    assetId: eventData.assetId,
+                    name: `Unknown Asset ${eventData.assetId}`, // Placeholder name
+                    location: eventData.payload?.location || 'Unknown Location',
+                    status: eventData.payload?.status || 'operational',
+                    lastScannedAt: eventData.occurredAt,
+                    lastScannedBy: eventData.userId,
+                    metadata: eventData.payload || {}
+                });
+                await newAsset.save();
+                console.log(`Auto-created asset: ${eventData.assetId}`);
             }
 
             results.processed++;
