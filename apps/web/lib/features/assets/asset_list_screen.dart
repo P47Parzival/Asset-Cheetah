@@ -6,6 +6,7 @@ import 'package:data/repositories/dashboard_repository.dart';
 
 import 'add_asset_dialog.dart';
 import 'qr_code_dialog.dart';
+import '../../providers/user_role_provider.dart';
 
 class AssetListScreen extends ConsumerStatefulWidget {
   const AssetListScreen({super.key});
@@ -67,23 +68,49 @@ class _AssetListScreenState extends ConsumerState<AssetListScreen> {
     if (_isLoading && _assets.isEmpty) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text('Error: $_error', style: const TextStyle(color: Colors.red)));
 
+    // Get user role for RBAC
+    final userRoleAsync = ref.watch(userRoleProvider);
+    final canEdit = userRoleAsync.maybeWhen(
+      data: (role) => role == 'manager' || role == 'admin',
+      orElse: () => false,
+    );
+
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => AddAssetDialog(onAssetAdded: _fetchAssets),
-          );
-        },
-        label: const Text('Add Asset'),
-        icon: const Icon(Icons.add),
-      ),
+      floatingActionButton: canEdit
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => AddAssetDialog(onAssetAdded: _fetchAssets),
+                );
+              },
+              label: const Text('Add Asset'),
+              icon: const Icon(Icons.add),
+            )
+          : null, // Hide button for operators
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Asset Inventory', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Asset Inventory', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                userRoleAsync.when(
+                  data: (role) => Chip(
+                    label: Text('Role: ${role?.toUpperCase() ?? 'UNKNOWN'}'),
+                    backgroundColor: role == 'admin' 
+                        ? Colors.red.shade100 
+                        : role == 'manager' 
+                            ? Colors.blue.shade100 
+                            : Colors.grey.shade200,
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
             Expanded(
               child: Card(
@@ -148,7 +175,7 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     Color color = Colors.grey;
     if (status == 'active') color = Colors.green;
-    if (status == 'operational') color = Colors.green; // Handle operational as well
+    if (status == 'operational') color = Colors.green;
     if (status == 'maintenance') color = Colors.orange;
     if (status == 'retired') color = Colors.red;
 
