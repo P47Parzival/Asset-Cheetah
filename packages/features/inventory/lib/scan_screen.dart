@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:data/data.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
@@ -17,6 +18,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
   final MobileScannerController controller = MobileScannerController();
   final Uuid _uuid = const Uuid();
   Position? _currentPosition;
+  String? _currentAddress;
   bool _isLoadingLocation = false;
 
   @override
@@ -69,11 +71,53 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       _currentPosition = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+      
+      // Reverse geocode to get address
+      await _reverseGeocode();
+      
       setState(() => _isLoadingLocation = false);
     } catch (e) {
       print('Location Error: $e');
       setState(() => _isLoadingLocation = false);
     }
+  }
+
+  Future<void> _reverseGeocode() async {
+    if (_currentPosition == null) return;
+    
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+      );
+      
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks.first;
+        _currentAddress = _formatAddress(place);
+      }
+    } catch (e) {
+      print('Reverse geocoding error: $e');
+      _currentAddress = null;
+    }
+  }
+
+  String _formatAddress(Placemark place) {
+    List<String> parts = [];
+    
+    if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+      parts.add(place.subLocality!);
+    }
+    if (place.locality != null && place.locality!.isNotEmpty) {
+      parts.add(place.locality!);
+    }
+    if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+      parts.add(place.administrativeArea!);
+    }
+    if (place.country != null && place.country!.isNotEmpty) {
+      parts.add(place.country!);
+    }
+    
+    return parts.isNotEmpty ? parts.join(', ') : 'Unknown Location';
   }
 
   Future<void> _refreshLocation() async {
@@ -82,17 +126,28 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       _currentPosition = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+      await _reverseGeocode();
     } catch (e) {
       print('Location refresh error: $e');
     }
     setState(() => _isLoadingLocation = false);
   }
 
-  String _getLocationString() {
+  String _getCoordinatesString() {
+    if (_currentPosition == null) {
+      return 'Unknown';
+    }
+    return '${_currentPosition!.latitude.toStringAsFixed(4)}, ${_currentPosition!.longitude.toStringAsFixed(4)}';
+  }
+
+  String _getFullLocationString() {
     if (_currentPosition == null) {
       return 'Unknown Location';
     }
-    return 'GPS: ${_currentPosition!.latitude.toStringAsFixed(4)}, ${_currentPosition!.longitude.toStringAsFixed(4)}';
+    if (_currentAddress != null) {
+      return _currentAddress!;
+    }
+    return _getCoordinatesString();
   }
 
   @override
@@ -120,7 +175,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                       _currentPosition != null ? Icons.location_on : Icons.location_off,
                       color: _currentPosition != null ? Colors.green : Colors.red,
                     ),
-                    tooltip: _getLocationString(),
+                    tooltip: _getFullLocationString(),
                     onPressed: _refreshLocation,
                   ),
           ),
@@ -186,23 +241,43 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               color: Colors.black87,
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    _currentPosition != null ? Icons.location_on : Icons.location_off,
-                    color: _currentPosition != null ? Colors.green : Colors.grey,
-                    size: 16,
+                  Row(
+                    children: [
+                      Icon(
+                        _currentPosition != null ? Icons.location_on : Icons.location_off,
+                        color: _currentPosition != null ? Colors.green : Colors.grey,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _currentAddress ?? 'Getting address...',
+                          style: TextStyle(
+                            color: _currentPosition != null ? Colors.white : Colors.grey,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _getLocationString(),
-                    style: TextStyle(
-                      color: _currentPosition != null ? Colors.white : Colors.grey,
-                      fontSize: 12,
+                  if (_currentPosition != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'GPS: ${_getCoordinatesString()}',
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 11,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -255,10 +330,26 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                         _DetailRow(label: 'Status', value: asset.status.toUpperCase(), valueColor: _getStatusColor(asset.status)),
                         _DetailRow(label: 'Stored Location', value: asset.location),
                         const Divider(),
-                        _DetailRow(
-                          label: 'Your Location', 
-                          value: _getLocationString(),
-                          valueColor: _currentPosition != null ? Colors.blue : Colors.grey,
+                        const Text('Your Current Location:', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        const SizedBox(height: 4),
+                        if (_currentAddress != null) ...[
+                          Row(
+                            children: [
+                              const Icon(Icons.place, size: 16, color: Colors.blue),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _currentAddress!,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 2),
+                        Text(
+                          'GPS: ${_getCoordinatesString()}',
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                         ),
                       ],
                     )
@@ -269,10 +360,27 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                         const Text('Asset not in local database.', style: TextStyle(color: Colors.orange)),
                         const Text('Pull assets from server to sync.', style: TextStyle(fontSize: 12, color: Colors.grey)),
                         const Divider(),
-                        _DetailRow(
-                          label: 'Your Location', 
-                          value: _getLocationString(),
-                          valueColor: _currentPosition != null ? Colors.blue : Colors.grey,
+                        const Text('Your Current Location:', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        const SizedBox(height: 4),
+                        if (_currentAddress != null) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.place, size: 16, color: Colors.blue),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  _currentAddress!,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 2),
+                        Text(
+                          'GPS: ${_getCoordinatesString()}',
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                         ),
                       ],
                     ),
@@ -354,7 +462,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
     // Add GPS location to the payload
     final enrichedPayload = Map<String, dynamic>.from(payload);
     if (_currentPosition != null) {
-      enrichedPayload['location'] = _getLocationString();
+      // Use human-readable address as the primary location
+      enrichedPayload['location'] = _currentAddress ?? _getCoordinatesString();
       enrichedPayload['gps'] = {
         'lat': _currentPosition!.latitude,
         'lng': _currentPosition!.longitude,
@@ -381,9 +490,11 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
         if (actionType == 'STATUS_CHANGE' && payload.containsKey('status')) {
           localAsset.status = payload['status'];
         }
-        // Always update location with GPS coordinates
-        if (_currentPosition != null) {
-          localAsset.location = _getLocationString();
+        // Always update location with human-readable address
+        if (_currentAddress != null) {
+          localAsset.location = _currentAddress!;
+        } else if (_currentPosition != null) {
+          localAsset.location = _getCoordinatesString();
         }
         await isar.localAssets.put(localAsset);
       }
