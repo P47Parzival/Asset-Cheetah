@@ -28,7 +28,6 @@ const syncEvents = async (req, res) => {
             const newEvent = new Event({
                 ...eventData,
                 syncedAt: Date.now(),
-                // Ensure userId is valid ObjectId if passed as string, handled by Mongoose usually if schema matches
             });
             await newEvent.save();
 
@@ -39,7 +38,7 @@ const syncEvents = async (req, res) => {
                 // Update asset based on action type
                 switch (eventData.actionType) {
                     case 'SCAN':
-                        // Scan updates lastScanned
+                        // Scan updates lastScanned and location (from GPS)
                         break;
                     case 'STATUS_CHANGE':
                         if (eventData.payload && eventData.payload.status) {
@@ -51,6 +50,17 @@ const syncEvents = async (req, res) => {
                             asset.location = eventData.payload.location;
                         }
                         break;
+                }
+
+                // Update location from GPS if available in payload
+                if (eventData.payload && eventData.payload.location) {
+                    asset.location = eventData.payload.location;
+                }
+
+                // Store GPS coordinates in metadata if available
+                if (eventData.payload && eventData.payload.gps) {
+                    asset.metadata = asset.metadata || {};
+                    asset.metadata.lastGps = eventData.payload.gps;
                 }
 
                 // Common updates
@@ -67,10 +77,10 @@ const syncEvents = async (req, res) => {
                     status: eventData.payload?.status || 'operational',
                     lastScannedAt: eventData.occurredAt,
                     lastScannedBy: eventData.userId,
-                    metadata: eventData.payload || {}
+                    metadata: eventData.payload?.gps ? { lastGps: eventData.payload.gps } : {}
                 });
                 await newAsset.save();
-                console.log(`Auto-created asset: ${eventData.assetId}`);
+                console.log(`Auto-created asset: ${eventData.assetId} at ${eventData.payload?.location || 'unknown location'}`);
             }
 
             results.processed++;

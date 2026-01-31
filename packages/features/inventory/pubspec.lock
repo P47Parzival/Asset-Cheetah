@@ -9,13 +9,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.0"
-  auth:
-    dependency: "direct main"
-    description:
-      path: "../../packages/features/auth"
-      relative: true
-    source: path
-    version: "0.0.1"
   boolean_selector:
     dependency: transitive
     description:
@@ -59,14 +52,14 @@ packages:
   common_widgets:
     dependency: "direct main"
     description:
-      path: "../../packages/features/common_widgets"
+      path: "../common_widgets"
       relative: true
     source: path
     version: "0.0.1"
   core:
     dependency: "direct main"
     description:
-      path: "../../packages/core"
+      path: "../../core"
       relative: true
     source: path
     version: "0.0.1"
@@ -78,18 +71,10 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: ba631d1c7f7bef6b729a622b7b752645a2d076dba9976925b8f25725a30e1ee6
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.8"
   data:
     dependency: "direct main"
     description:
-      path: "../../packages/data"
+      path: "../../data"
       relative: true
     source: path
     version: "0.0.1"
@@ -146,14 +131,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_lints:
-    dependency: "direct dev"
-    description:
-      name: flutter_lints
-      sha256: a25a15ebbdfc33ab1cd26c63a6ee519df92338a9c10f122adda92938253bef04
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.3"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -221,7 +198,7 @@ packages:
     source: sdk
     version: "0.0.0"
   geolocator:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: geolocator
       sha256: "149876cc5207a0f5daf4fdd3bfcf0a0f27258b3fe95108fa084f527ad0568f1b"
@@ -292,13 +269,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
-  inventory:
-    dependency: "direct main"
-    description:
-      path: "../../packages/features/inventory"
-      relative: true
-    source: path
-    version: "0.0.1"
   isar:
     dependency: transitive
     description:
@@ -347,14 +317,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.2"
-  lints:
-    dependency: transitive
-    description:
-      name: lints
-      sha256: "0a217c6c989d21039f1498c3ed9f3ed71b354e69873f13a8dfc3c9fe76f1b452"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.1"
   logging:
     dependency: transitive
     description:
@@ -396,7 +358,7 @@ packages:
     source: hosted
     version: "2.0.0"
   mobile_scanner:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: mobile_scanner
       sha256: d234581c090526676fd8fab4ada92f35c6746e3fb4f05a399665d75a399fb760
@@ -499,13 +461,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  reports:
-    dependency: "direct main"
-    description:
-      path: "../../packages/features/reports"
-      relative: true
-    source: path
-    version: "0.0.1"
   riverpod:
     dependency: transitive
     description:
@@ -592,7 +547,7 @@ packages:
     source: hosted
     version: "1.4.0"
   uuid:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: uuid
       sha256: a11b666489b1954e01d992f3d601b1804a33937b5a8fe677bd26b8a9f96f96e8

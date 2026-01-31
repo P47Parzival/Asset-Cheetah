@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:data/data.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
@@ -15,6 +16,84 @@ class ScanScreen extends ConsumerStatefulWidget {
 class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObserver {
   final MobileScannerController controller = MobileScannerController();
   final Uuid _uuid = const Uuid();
+  Position? _currentPosition;
+  bool _isLoadingLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    setState(() => _isLoadingLocation = true);
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable GPS.')),
+          );
+        }
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+
+      // Check permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permissions are denied')),
+            );
+          }
+          setState(() => _isLoadingLocation = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are permanently denied. Please enable in settings.')),
+          );
+        }
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+
+      // Get current position
+      _currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() => _isLoadingLocation = false);
+    } catch (e) {
+      print('Location Error: $e');
+      setState(() => _isLoadingLocation = false);
+    }
+  }
+
+  Future<void> _refreshLocation() async {
+    setState(() => _isLoadingLocation = true);
+    try {
+      _currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+    } catch (e) {
+      print('Location refresh error: $e');
+    }
+    setState(() => _isLoadingLocation = false);
+  }
+
+  String _getLocationString() {
+    if (_currentPosition == null) {
+      return 'Unknown Location';
+    }
+    return 'GPS: ${_currentPosition!.latitude.toStringAsFixed(4)}, ${_currentPosition!.longitude.toStringAsFixed(4)}';
+  }
 
   @override
   void reassemble() {
@@ -27,6 +106,24 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       appBar: AppBar(
         title: const Text('Asset Scanner'),
         actions: [
+          // Location indicator
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _isLoadingLocation
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : IconButton(
+                    icon: Icon(
+                      _currentPosition != null ? Icons.location_on : Icons.location_off,
+                      color: _currentPosition != null ? Colors.green : Colors.red,
+                    ),
+                    tooltip: _getLocationString(),
+                    onPressed: _refreshLocation,
+                  ),
+          ),
           IconButton(
             icon: const Icon(Icons.cloud_download),
             tooltip: 'Pull Assets from Server',
@@ -66,34 +163,64 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
           ),
         ],
       ),
-      body: MobileScanner(
-        controller: controller,
-        onDetect: (capture) {
-          final List<Barcode> barcodes = capture.barcodes;
-          for (final barcode in barcodes) {
-            if (barcode.rawValue != null) {
-              controller.stop();
-              _lookupAndShowAssetDialog(context, barcode.rawValue!);
-              break;
-            }
-          }
-        },
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: controller,
+            onDetect: (capture) async {
+              final List<Barcode> barcodes = capture.barcodes;
+              for (final barcode in barcodes) {
+                if (barcode.rawValue != null) {
+                  controller.stop();
+                  // Refresh location before showing dialog
+                  await _refreshLocation();
+                  _lookupAndShowAssetDialog(context, barcode.rawValue!);
+                  break;
+                }
+              }
+            },
+          ),
+          // Location status banner
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.black87,
+              child: Row(
+                children: [
+                  Icon(
+                    _currentPosition != null ? Icons.location_on : Icons.location_off,
+                    color: _currentPosition != null ? Colors.green : Colors.grey,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _getLocationString(),
+                    style: TextStyle(
+                      color: _currentPosition != null ? Colors.white : Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Future<void> _lookupAndShowAssetDialog(BuildContext context, String assetId) async {
-    // Try to find asset in local database first
     final localDb = ref.read(localDatabaseProvider);
     final isar = await localDb.db;
     
     final localAsset = await isar.localAssets.getByAssetId(assetId);
     
     if (localAsset != null) {
-      // Asset found in local DB - show details
       _showAssetDialog(context, assetId, localAsset);
     } else {
-      // Asset not in local DB - show with unknown status
       _showAssetDialog(context, assetId, null);
     }
   }
@@ -126,15 +253,27 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                       children: [
                         _DetailRow(label: 'Name', value: asset.name),
                         _DetailRow(label: 'Status', value: asset.status.toUpperCase(), valueColor: _getStatusColor(asset.status)),
-                        _DetailRow(label: 'Location', value: asset.location),
+                        _DetailRow(label: 'Stored Location', value: asset.location),
+                        const Divider(),
+                        _DetailRow(
+                          label: 'Your Location', 
+                          value: _getLocationString(),
+                          valueColor: _currentPosition != null ? Colors.blue : Colors.grey,
+                        ),
                       ],
                     )
-                  : const Column(
+                  : Column(
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 32),
-                        SizedBox(height: 8),
-                        Text('Asset not in local database.', style: TextStyle(color: Colors.orange)),
-                        Text('Pull assets from server to sync.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 32),
+                        const SizedBox(height: 8),
+                        const Text('Asset not in local database.', style: TextStyle(color: Colors.orange)),
+                        const Text('Pull assets from server to sync.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const Divider(),
+                        _DetailRow(
+                          label: 'Your Location', 
+                          value: _getLocationString(),
+                          valueColor: _currentPosition != null ? Colors.blue : Colors.grey,
+                        ),
                       ],
                     ),
             ),
@@ -212,11 +351,22 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
        return;
     }
 
+    // Add GPS location to the payload
+    final enrichedPayload = Map<String, dynamic>.from(payload);
+    if (_currentPosition != null) {
+      enrichedPayload['location'] = _getLocationString();
+      enrichedPayload['gps'] = {
+        'lat': _currentPosition!.latitude,
+        'lng': _currentPosition!.longitude,
+        'accuracy': _currentPosition!.accuracy,
+      };
+    }
+
     final event = LocalEvent()
       ..eventId = _uuid.v4()
       ..assetId = assetId
       ..actionType = actionType
-      ..payloadJson = jsonEncode(payload)
+      ..payloadJson = jsonEncode(enrichedPayload)
       ..occurredAt = DateTime.now()
       ..isSynced = false
       ..userId = userId
@@ -225,21 +375,17 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
     await isar.writeTxn(() async {
       await isar.localEvents.put(event);
       
-      // Also update local asset status if it exists
-      if (actionType == 'STATUS_CHANGE' && payload.containsKey('status')) {
-        final localAsset = await isar.localAssets.getByAssetId(assetId);
-        if (localAsset != null) {
+      // Also update local asset status and location if it exists
+      final localAsset = await isar.localAssets.getByAssetId(assetId);
+      if (localAsset != null) {
+        if (actionType == 'STATUS_CHANGE' && payload.containsKey('status')) {
           localAsset.status = payload['status'];
-          await isar.localAssets.put(localAsset);
         }
-      }
-      
-      if (actionType == 'LOCATION_UPDATE' && payload.containsKey('location')) {
-        final localAsset = await isar.localAssets.getByAssetId(assetId);
-        if (localAsset != null) {
-          localAsset.location = payload['location'];
-          await isar.localAssets.put(localAsset);
+        // Always update location with GPS coordinates
+        if (_currentPosition != null) {
+          localAsset.location = _getLocationString();
         }
+        await isar.localAssets.put(localAsset);
       }
     });
 
@@ -266,7 +412,13 @@ class _DetailRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+          Flexible(
+            child: Text(
+              value, 
+              style: TextStyle(fontWeight: FontWeight.bold, color: valueColor),
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );
