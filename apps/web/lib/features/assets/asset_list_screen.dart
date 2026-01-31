@@ -177,6 +177,7 @@ class _StatusBadge extends StatelessWidget {
     if (status == 'active') color = Colors.green;
     if (status == 'operational') color = Colors.green;
     if (status == 'maintenance') color = Colors.orange;
+    if (status == 'in_transit') color = Colors.blue;
     if (status == 'retired') color = Colors.red;
 
     return Container(

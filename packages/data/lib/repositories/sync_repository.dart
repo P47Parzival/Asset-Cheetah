@@ -72,25 +72,16 @@ class SyncRepository {
   }
 
   // Pull updated assets from server
-  Future<void> pullAssets() async {
+  Future<int> pullAssets() async {
     final isar = await _localDb.db;
-    
-    // Get last sync time (stored in a separate config or just check latest updated asset?)
-    // For simplicity, let's just query everything or use a simple shared_pref for timestamp globally?
-    // Let's assume we pass a timestamp or fetch all for now.
-    // In a real app, use SharedPreferences to store 'last_asset_sync_time'
+    int assetCount = 0;
     
     try {
-      // TODO: Get lastSync from prefs
-      String? lastSync = null; 
       final token = await _authRepository.getToken();
       if (token == null) throw Exception('Not authenticated');
 
       final response = await _dio.get(
         '/sync/assets',
-        queryParameters: {
-          if (lastSync != null) 'lastSync': lastSync,
-        },
         options: Options(
           headers: {
             'Authorization': 'Bearer $token',
@@ -105,34 +96,30 @@ class SyncRepository {
           for (var data in assetsData) {
             final asset = LocalAsset()
               ..assetId = data['assetId']
-              ..name = data['name']
-              ..status = data['status']
-              ..location = data['location']
+              ..name = data['name'] ?? 'Unknown'
+              ..status = data['status'] ?? 'unknown'
+              ..location = data['location'] ?? 'Unknown'
               ..lastScannedAt = data['lastScannedAt'] != null 
                   ? DateTime.parse(data['lastScannedAt']) 
                   : null
-              ..lastScannedBy = data['lastScannedBy']
+              ..lastScannedBy = data['lastScannedBy']?.toString()
               ..metadataJson = jsonEncode(data['metadata'] ?? {})
-              ..updatedAt = DateTime.now(); // Local update time or server time?
+              ..updatedAt = DateTime.now();
 
-            // By default Isar replaces if ID matches, but we used auto-increment ID.
-            // We need to query by assetId and update.
-            // Or change LocalAsset to use fastHash(assetId) as Id.
-            // For now, let's find existing by Index.
-            
-            final existing = await isar.localAssets
-                .filter()
-                .assetIdEqualTo(asset.assetId)
-                .findFirst();
+            // Use the Isar-generated getByAssetId method
+            final existing = await isar.localAssets.getByAssetId(asset.assetId);
 
             if (existing != null) {
               asset.id = existing.id;
             }
             
             await isar.localAssets.put(asset);
+            assetCount++;
           }
         });
       }
+      
+      return assetCount;
     } catch (e) {
       print('Sync Pull Error: $e');
       rethrow;

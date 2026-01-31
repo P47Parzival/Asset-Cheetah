@@ -28,7 +28,27 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
         title: const Text('Asset Scanner'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.cloud_download),
+            tooltip: 'Pull Assets from Server',
+            onPressed: () async {
+              try {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Pulling assets from server...')),
+                );
+                final count = await ref.read(syncRepositoryProvider).pullAssets();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Downloaded $count assets')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Pull failed: $e')),
+                );
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.sync),
+            tooltip: 'Push Events to Server',
             onPressed: () async {
               try {
                 await ref.read(syncRepositoryProvider).pushEvents();
@@ -142,10 +162,14 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
             ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
-              onPressed: () => _logEvent(context, assetId, 'LOCATION_UPDATE', {'location': 'Warehouse B'}),
+              onPressed: () => _logEvent(context, assetId, 'STATUS_CHANGE', {'status': 'in_transit'}),
               icon: const Icon(Icons.warehouse),
               label: const Text('Move to Warehouse B'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
             ),
             const SizedBox(height: 16),
             TextButton(
@@ -168,6 +192,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
         return Colors.green;
       case 'maintenance':
         return Colors.orange;
+      case 'in_transit':
+        return Colors.blue;
       case 'retired':
         return Colors.red;
       default:
