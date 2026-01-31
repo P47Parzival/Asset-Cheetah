@@ -42,7 +42,6 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await ref.read(authRepositoryProvider).logout();
-              // Navigate back to login (handled by main.dart usually)
             },
           ),
         ],
@@ -53,8 +52,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
           final List<Barcode> barcodes = capture.barcodes;
           for (final barcode in barcodes) {
             if (barcode.rawValue != null) {
-              controller.stop(); // Stop scanning
-              _showAssetDialog(context, barcode.rawValue!);
+              controller.stop();
+              _lookupAndShowAssetDialog(context, barcode.rawValue!);
               break;
             }
           }
@@ -63,7 +62,23 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
     );
   }
 
-  void _showAssetDialog(BuildContext context, String assetId) {
+  Future<void> _lookupAndShowAssetDialog(BuildContext context, String assetId) async {
+    // Try to find asset in local database first
+    final localDb = ref.read(localDatabaseProvider);
+    final isar = await localDb.db;
+    
+    final localAsset = await isar.localAssets.getByAssetId(assetId);
+    
+    if (localAsset != null) {
+      // Asset found in local DB - show details
+      _showAssetDialog(context, assetId, localAsset);
+    } else {
+      // Asset not in local DB - show with unknown status
+      _showAssetDialog(context, assetId, null);
+    }
+  }
+
+  void _showAssetDialog(BuildContext context, String assetId, LocalAsset? asset) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -72,20 +87,65 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Asset Scanned: $assetId', style: Theme.of(context).textTheme.titleLarge),
+            // Asset ID Header
+            Text('Asset Scanned', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey)),
+            const SizedBox(height: 4),
+            Text(assetId, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            ElevatedButton(
+            
+            // Asset Details Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: asset != null
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DetailRow(label: 'Name', value: asset.name),
+                        _DetailRow(label: 'Status', value: asset.status.toUpperCase(), valueColor: _getStatusColor(asset.status)),
+                        _DetailRow(label: 'Location', value: asset.location),
+                      ],
+                    )
+                  : const Column(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 32),
+                        SizedBox(height: 8),
+                        Text('Asset not in local database.', style: TextStyle(color: Colors.orange)),
+                        Text('Pull assets from server to sync.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Action Buttons
+            const Text('Choose Action:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
               onPressed: () => _logEvent(context, assetId, 'SCAN', {}),
-              child: const Text('Log Scan Only'),
+              icon: const Icon(Icons.check),
+              label: const Text('Log Scan Only'),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
             ),
-            ElevatedButton(
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
               onPressed: () => _logEvent(context, assetId, 'STATUS_CHANGE', {'status': 'maintenance'}),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Mark Maintenance'),
+              icon: const Icon(Icons.build),
+              label: const Text('Mark Maintenance'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
             ),
-             ElevatedButton(
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
               onPressed: () => _logEvent(context, assetId, 'LOCATION_UPDATE', {'location': 'Warehouse B'}),
-              child: const Text('Move to Warehouse B'),
+              icon: const Icon(Icons.warehouse),
+              label: const Text('Move to Warehouse B'),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
             ),
             const SizedBox(height: 16),
             TextButton(
@@ -99,6 +159,20 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
         ),
       ),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'operational':
+      case 'active':
+        return Colors.green;
+      case 'maintenance':
+        return Colors.orange;
+      case 'retired':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   Future<void> _logEvent(BuildContext context, String assetId, String actionType, Map<String, dynamic> payload) async {
@@ -120,10 +194,27 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       ..occurredAt = DateTime.now()
       ..isSynced = false
       ..userId = userId
-      ..deviceId = 'device_001'; // Keep device ID hardcoded or use device_info_plus later
+      ..deviceId = 'device_001';
 
     await isar.writeTxn(() async {
       await isar.localEvents.put(event);
+      
+      // Also update local asset status if it exists
+      if (actionType == 'STATUS_CHANGE' && payload.containsKey('status')) {
+        final localAsset = await isar.localAssets.getByAssetId(assetId);
+        if (localAsset != null) {
+          localAsset.status = payload['status'];
+          await isar.localAssets.put(localAsset);
+        }
+      }
+      
+      if (actionType == 'LOCATION_UPDATE' && payload.containsKey('location')) {
+        final localAsset = await isar.localAssets.getByAssetId(assetId);
+        if (localAsset != null) {
+          localAsset.location = payload['location'];
+          await isar.localAssets.put(localAsset);
+        }
+      }
     });
 
     if (mounted) {
@@ -131,5 +222,27 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Event Saved Locally. Remember to Sync!')));
       controller.start();
     }
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _DetailRow({required this.label, required this.value, this.valueColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+        ],
+      ),
+    );
   }
 }
