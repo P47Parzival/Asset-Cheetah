@@ -21,6 +21,9 @@ class DashboardShell extends StatelessWidget {
                 case 1:
                   context.go('/assets');
                   break;
+                case 2:
+                  context.go('/people');
+                  break;
               }
             },
             labelType: NavigationRailLabelType.all,
@@ -35,6 +38,11 @@ class DashboardShell extends StatelessWidget {
                 selectedIcon: Icon(Icons.inventory_2),
                 label: Text('Assets'),
               ),
+              NavigationRailDestination(
+                icon: Icon(Icons.people_outline),
+                selectedIcon: Icon(Icons.people),
+                label: Text('People'),
+              ),
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
@@ -48,6 +56,7 @@ class DashboardShell extends StatelessWidget {
     final String location = GoRouterState.of(context).uri.toString();
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/assets')) return 1;
+    if (location.startsWith('/people')) return 2;
     return 0;
   }
 }

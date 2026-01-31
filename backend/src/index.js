@@ -26,6 +26,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/sync', require('./routes/syncRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/assets', require('./routes/assetRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

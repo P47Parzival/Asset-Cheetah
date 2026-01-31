@@ -5,6 +5,7 @@ import 'features/auth/web_login_screen.dart';
 import 'features/dashboard/dashboard_shell.dart';
 import 'features/dashboard/overview_screen.dart';
 import 'features/assets/asset_list_screen.dart';
+import 'features/people/people_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   // In a real app, listen to auth state to redirect
@@ -28,9 +29,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/assets',
             builder: (context, state) => const AssetListScreen(),
           ),
+          GoRoute(
+            path: '/people',
+            builder: (context, state) => const PeopleScreen(),
+          ),
         ],
       ),
     ],
   );
 });
-
